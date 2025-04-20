@@ -11,6 +11,27 @@ const App: React.FC = () => {
   const [timerDuration, setTimerDuration] = useState<number>(30);
   const [timerRemaining, setTimerRemaining] = useState<number>(30);
   const [currentSpeed, setCurrentSpeed] = useState<number>(speed);
+  const [soundOn, setSoundOn] = useState<boolean>(true);
+
+  // Audio setup for edge click
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  useEffect(() => {
+    audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+  }, []);
+  
+  const playClick = () => {
+    if (!soundOn) return;
+    const ctx = audioCtxRef.current;
+    if (!ctx) return;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.frequency.value = 600;
+    gain.gain.value = 0.2;
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.05);
+  };
 
   // Toggle play/pause via spacebar
   useEffect(() => {
@@ -52,10 +73,10 @@ const App: React.FC = () => {
   const targetJitterRef = useRef<number>(1);
   const jitterTimerRef = useRef<number>(0);
   const jitterIntervalRef = useRef<number>(
-    2 + Math.random() * (5 - 2)
-  ); // start between 2s and 5s
-  const MIN_JITTER_INTERVAL = 1; // seconds
-  const MAX_JITTER_INTERVAL = 2; // seconds
+    1 + Math.random() * (2 - 1)
+  );
+  const MIN_JITTER_INTERVAL = 1;
+  const MAX_JITTER_INTERVAL = 2;
 
   // Canvas resize
   useEffect(() => {
@@ -91,7 +112,7 @@ const App: React.FC = () => {
           if (jitterTimerRef.current >= jitterIntervalRef.current) {
             jitterTimerRef.current = 0;
             jitterIntervalRef.current = MIN_JITTER_INTERVAL + Math.random() * (MAX_JITTER_INTERVAL - MIN_JITTER_INTERVAL);
-            targetJitterRef.current = 0.8 + Math.random() * 0.8; // between 0.8x and 1.6x
+            targetJitterRef.current = 0.5 + Math.random() * 1.0;
           }
           jitterRef.current += (targetJitterRef.current - jitterRef.current) * delta * 1;
         } else {
@@ -105,6 +126,7 @@ const App: React.FC = () => {
         xRef.current += dirRef.current * actualSpeed * delta;
         const maxX = canvas.width - size;
         if (xRef.current > maxX || xRef.current < size) {
+          playClick();
           dirRef.current *= -1;
           xRef.current = Math.max(size, Math.min(xRef.current, maxX));
         }
@@ -123,7 +145,7 @@ const App: React.FC = () => {
 
     frameId = requestAnimationFrame(render);
     return () => cancelAnimationFrame(frameId);
-  }, [speed, size, inconsistent, isPlaying, objectColor, bgColor]);
+  }, [speed, size, inconsistent, isPlaying, objectColor, bgColor, soundOn]);
 
   return (
     <div style={{
@@ -192,9 +214,9 @@ const App: React.FC = () => {
             onChange={e => setSpeed(Number(e.target.value))}
             style={{ width: '100%' }}
           />
-          <div style={{ marginTop: 4, fontSize: '0.9rem', color: '#333' }}>
+          {/* <div style={{ marginTop: 4, fontSize: '0.9rem', color: '#333' }}>
             Live: {currentSpeed.toFixed(1)} px/s
-          </div>
+          </div> */}
         </div>
         {/* Size slider */}
         <div style={{ flex: 1, textAlign: 'center' }}>
@@ -216,6 +238,15 @@ const App: React.FC = () => {
             onChange={e => setInconsistent(e.target.checked)}
             style={{ marginRight: 8 }}
           />Inconsistent
+        </label>
+        {/* Sound toggle */}
+        <label style={{ display: 'flex', alignItems: 'center', fontWeight: 500, color: '#555' }}>
+          <input
+            type="checkbox"
+            checked={soundOn}
+            onChange={e => setSoundOn(e.target.checked)}
+            style={{ marginRight: 8 }}
+          />Sound
         </label>
         {/* Color pickers */}
         <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
