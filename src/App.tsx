@@ -10,6 +10,7 @@ const App: React.FC = () => {
   const [bgColor, setBgColor] = useState<string>("#FFFFFF");
   const [timerDuration, setTimerDuration] = useState<number>(30);
   const [timerRemaining, setTimerRemaining] = useState<number>(30);
+  const [currentSpeed, setCurrentSpeed] = useState<number>(speed);
 
   // Toggle play/pause via spacebar
   useEffect(() => {
@@ -23,27 +24,20 @@ const App: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Timer countdown using rAF
+  // Timer countdown using setInterval for accurate seconds
   useEffect(() => {
-    let frameId: number;
-    let lastTimestamp: number | null = null;
-    const tick = (timestamp: number) => {
-      if (!isPlaying) return;
-      if (lastTimestamp !== null) {
-        const delta = (timestamp - lastTimestamp) / 1000;
-        setTimerRemaining(prev => {
-          const next = Math.max(0, prev - delta);
-          if (next === 0) setIsPlaying(false);
-          return next;
-        });
-      }
-      lastTimestamp = timestamp;
-      frameId = requestAnimationFrame(tick);
-    };
-    if (isPlaying && timerRemaining > 0) {
-      frameId = requestAnimationFrame(tick);
-    }
-    return () => cancelAnimationFrame(frameId);
+    if (!isPlaying) return;
+    const id = setInterval(() => {
+      setTimerRemaining(prev => {
+        if (prev <= 1) {
+          clearInterval(id);
+          setIsPlaying(false);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(id);
   }, [isPlaying]);
 
   // Reset remaining when duration changes
@@ -57,7 +51,11 @@ const App: React.FC = () => {
   const jitterRef = useRef<number>(1);
   const targetJitterRef = useRef<number>(1);
   const jitterTimerRef = useRef<number>(0);
-  const JITTER_INTERVAL = 0.5;
+  const jitterIntervalRef = useRef<number>(
+    2 + Math.random() * (5 - 2)
+  ); // start between 2s and 5s
+  const MIN_JITTER_INTERVAL = 1; // seconds
+  const MAX_JITTER_INTERVAL = 2; // seconds
 
   // Canvas resize
   useEffect(() => {
@@ -82,23 +80,28 @@ const App: React.FC = () => {
     if (!canvas || !ctx) return;
     let lastTime: number | null = null;
     let frameId: number;
+
     const render = (time: number) => {
       if (!isPlaying) return;
       if (lastTime !== null) {
         const delta = (time - lastTime) / 1000;
+
         if (inconsistent) {
           jitterTimerRef.current += delta;
-          if (jitterTimerRef.current >= JITTER_INTERVAL) {
+          if (jitterTimerRef.current >= jitterIntervalRef.current) {
             jitterTimerRef.current = 0;
-            targetJitterRef.current = 0.8 + Math.random() * 0.4;
+            jitterIntervalRef.current = MIN_JITTER_INTERVAL + Math.random() * (MAX_JITTER_INTERVAL - MIN_JITTER_INTERVAL);
+            targetJitterRef.current = 0.8 + Math.random() * 0.8; // between 0.8x and 1.6x
           }
-          jitterRef.current += (targetJitterRef.current - jitterRef.current) * delta * 2;
+          jitterRef.current += (targetJitterRef.current - jitterRef.current) * delta * 1;
         } else {
           jitterRef.current = 1;
           targetJitterRef.current = 1;
           jitterTimerRef.current = 0;
         }
+
         const actualSpeed = speed * jitterRef.current;
+        setCurrentSpeed(actualSpeed);
         xRef.current += dirRef.current * actualSpeed * delta;
         const maxX = canvas.width - size;
         if (xRef.current > maxX || xRef.current < size) {
@@ -106,6 +109,7 @@ const App: React.FC = () => {
           xRef.current = Math.max(size, Math.min(xRef.current, maxX));
         }
       }
+
       lastTime = time;
       ctx.fillStyle = bgColor;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -113,8 +117,10 @@ const App: React.FC = () => {
       ctx.arc(xRef.current, canvas.height / 2, size, 0, Math.PI * 2);
       ctx.fillStyle = objectColor;
       ctx.fill();
+
       frameId = requestAnimationFrame(render);
     };
+
     frameId = requestAnimationFrame(render);
     return () => cancelAnimationFrame(frameId);
   }, [speed, size, inconsistent, isPlaying, objectColor, bgColor]);
@@ -161,7 +167,7 @@ const App: React.FC = () => {
         {/* Timer display */}
         <div style={{ textAlign: 'center' }}>
           <label style={{ display: 'block', fontWeight: 500, color: '#555' }}>Remaining</label>
-          <span style={{ fontSize: '1.25rem', color: '#333' }}>{Math.ceil(timerRemaining)}s</span>
+          <span style={{ fontSize: '1.25rem', color: '#333' }}>{timerRemaining}s</span>
         </div>
         {/* Duration setter */}
         <div style={{ textAlign: 'center' }}>
@@ -175,36 +181,34 @@ const App: React.FC = () => {
             style={{ width: 60, padding: 4, borderRadius: 4, border: '1px solid #ccc' }}
           />
         </div>
-        {/* Reset */}
-        <button
-          onClick={() => { setIsPlaying(false); setTimerRemaining(timerDuration); }}
-          style={{ padding: '6px 12px', border: 'none', borderRadius: 4, backgroundColor: '#E94E77', color: '#fff', cursor: 'pointer' }}
-        >Reset</button>
-        {/* Speed */}
+        {/* Speed slider */}
         <div style={{ flex: 1, textAlign: 'center' }}>
           <label style={{ display: 'block', fontWeight: 500, color: '#555' }}>Speed</label>
           <input
             type="range"
             min={10}
-            max={500}
+            max={2000}
             value={speed}
             onChange={e => setSpeed(Number(e.target.value))}
             style={{ width: '100%' }}
           />
+          <div style={{ marginTop: 4, fontSize: '0.9rem', color: '#333' }}>
+            Live: {currentSpeed.toFixed(1)} px/s
+          </div>
         </div>
-        {/* Size */}
+        {/* Size slider */}
         <div style={{ flex: 1, textAlign: 'center' }}>
           <label style={{ display: 'block', fontWeight: 500, color: '#555' }}>Size</label>
           <input
             type="range"
             min={5}
-            max={100}
+            max={200}
             value={size}
             onChange={e => setSize(Number(e.target.value))}
             style={{ width: '100%' }}
           />
         </div>
-        {/* Inconsistent */}
+        {/* Inconsistent toggle */}
         <label style={{ display: 'flex', alignItems: 'center', fontWeight: 500, color: '#555' }}>
           <input
             type="checkbox"
@@ -213,7 +217,7 @@ const App: React.FC = () => {
             style={{ marginRight: 8 }}
           />Inconsistent
         </label>
-        {/* Colors */}
+        {/* Color pickers */}
         <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
           <span style={{ marginBottom: 4, fontWeight: 500, color: '#555' }}>Object Color</span>
           <input type="color" value={objectColor} onChange={e => setObjectColor(e.target.value)} style={{ width: 40, height: 30, border: 'none' }} />
