@@ -18,7 +18,7 @@ const App: React.FC = () => {
   useEffect(() => {
     audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
   }, []);
-  
+
   const playClick = () => {
     if (!soundOn) return;
     const ctx = audioCtxRef.current;
@@ -45,7 +45,7 @@ const App: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Timer countdown using setInterval for accurate seconds
+  // Timer countdown
   useEffect(() => {
     if (!isPlaying) return;
     const id = setInterval(() => {
@@ -72,9 +72,7 @@ const App: React.FC = () => {
   const jitterRef = useRef<number>(1);
   const targetJitterRef = useRef<number>(1);
   const jitterTimerRef = useRef<number>(0);
-  const jitterIntervalRef = useRef<number>(
-    1 + Math.random() * (2 - 1)
-  );
+  const jitterIntervalRef = useRef<number>(1 + Math.random() * (2 - 1));
   const MIN_JITTER_INTERVAL = 1;
   const MAX_JITTER_INTERVAL = 2;
 
@@ -94,19 +92,19 @@ const App: React.FC = () => {
     return () => window.removeEventListener('resize', resize);
   }, [size]);
 
-  // Animation loop
+  // Animation loop (always drawing, updates motion only when playing)
   useEffect(() => {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return;
-    let lastTime: number | null = null;
+    let lastTime = performance.now();
     let frameId: number;
 
     const render = (time: number) => {
-      if (!isPlaying) return;
-      if (lastTime !== null) {
-        const delta = (time - lastTime) / 1000;
+      const delta = (time - lastTime) / 1000;
 
+      // Only update physics when playing
+      if (isPlaying) {
         if (inconsistent) {
           jitterTimerRef.current += delta;
           if (jitterTimerRef.current >= jitterIntervalRef.current) {
@@ -132,7 +130,7 @@ const App: React.FC = () => {
         }
       }
 
-      lastTime = time;
+      // Always draw
       ctx.fillStyle = bgColor;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.beginPath();
@@ -140,6 +138,7 @@ const App: React.FC = () => {
       ctx.fillStyle = objectColor;
       ctx.fill();
 
+      lastTime = time;
       frameId = requestAnimationFrame(render);
     };
 
